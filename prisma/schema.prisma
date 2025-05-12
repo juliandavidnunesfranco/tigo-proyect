@@ -1,0 +1,176 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Modelo para Tenant (Tienda)
+model Tenant {
+  id        String          @id @default(uuid())
+  code      String          @unique
+  name      String
+  address   String
+  city      String
+  region    String
+  status    String          @default("ACTIVE") // ACTIVE, INACTIVE, SUSPENDED
+  features  TenantFeature[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  // Relaciones
+  users     UserTenant[]
+  clients   Client[]
+  sales     Sale[]
+  products  Product[]
+
+  @@map("tenants")
+}
+
+// Características de un Tenant
+model TenantFeature {
+  id       String @id @default(uuid())
+  tenantId String
+  name     String
+
+  // Relaciones
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, name])
+  @@map("tenant_features")
+}
+
+// Modelo para Usuario
+model User {
+  id        String       @id @default(uuid())
+  name      String
+  email     String       @unique
+  password  String
+  status    String       @default("ACTIVE") // ACTIVE, INACTIVE, SUSPENDED
+  lastLogin DateTime?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  // Relaciones
+  tenants   UserTenant[]
+  roles     UserRole[]
+  sales     Sale[]
+
+  @@map("users")
+}
+
+// Relación Usuario-Tenant
+model UserTenant {
+  userId    String
+  tenantId  String
+  createdAt DateTime @default(now())
+
+  // Relaciones
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Permisos específicos para este usuario en este tenant
+  permissions UserTenantPermission[]
+
+  @@id([userId, tenantId])
+  @@map("user_tenants")
+}
+
+// Permisos de un usuario en un tenant específico
+model UserTenantPermission {
+  id          String     @id @default(uuid())
+  userId      String
+  tenantId    String
+  permission  String
+
+  // Relaciones
+  userTenant  UserTenant @relation(fields: [userId, tenantId], references: [userId, tenantId], onDelete: Cascade)
+
+  @@unique([userId, tenantId, permission])
+  @@map("user_tenant_permissions")
+}
+
+// Roles de usuario
+model UserRole {
+  id        String   @id @default(uuid())
+  userId    String
+  role      String   // SELLER, STORE_ADMIN, MANAGER, SYSTEM_ADMIN
+  createdAt DateTime @default(now())
+
+  // Relaciones
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role])
+  @@map("user_roles")
+}
+
+// Modelo para Cliente
+model Client {
+  id            String   @id @default(uuid())
+  tenantId      String
+  name          String
+  documentId    String
+  documentType  String   @default("CC")
+  phone         String?
+  email         String?
+  address       String?
+  birthDate     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relaciones
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+  sales         Sale[]
+
+  @@unique([tenantId, documentId])
+  @@map("clients")
+}
+
+// Modelo para Venta
+model Sale {
+  id              String    @id @default(uuid())
+  tenantId        String
+  clientId        String
+  userId          String
+  productId       String
+  saleDate        DateTime  @default(now())
+  status          String    @default("PENDING") // PENDING, ACTIVE, CANCELLED
+  legalizationStatus String @default("PENDING") // PENDING, COMPLETED
+  legalizationDate DateTime?
+  value           Float
+  commissionRate  Float     @default(0)
+  commissionValue Float     @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relaciones
+  tenant          Tenant    @relation(fields: [tenantId], references: [id])
+  client          Client    @relation(fields: [clientId], references: [id])
+  user            User      @relation(fields: [userId], references: [id])
+  product         Product   @relation(fields: [productId], references: [id])
+
+  @@map("sales")
+}
+
+// Modelo para Producto
+model Product {
+  id          String   @id @default(uuid())
+  tenantId    String
+  code        String
+  name        String
+  type        String   // mobile, home, prepaid, chip
+  description String?
+  price       Float
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relaciones
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  sales       Sale[]
+
+  @@unique([tenantId, code])
+  @@map("products")
+}
